@@ -1,3 +1,7 @@
+2002-10-28 Monday 08:25  stas_degteff
+
+	* pntstr.pl (1.3): Fix shebang
+
 2002-06-19 Wednesday 08:11  stas
 
 	* .cvs2cl (1.1): ChangeLog generation on.
