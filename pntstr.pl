@@ -24,6 +24,9 @@ HELP
 #-----------------------------------------------------------------------------#
 #
 # $Log$
+# Revision 1.3  2002/10/28 08:25:50  stas_degteff
+# Fix shebang
+#
 # Revision 1.2  2002/06/04 11:37:05  stas
 # Some bugs fixed.
 #
@@ -52,10 +55,12 @@ HELP
 
 # Setup section --------------------------------------------------------------#
 
+#DOS/WIN
 $fidoconfig = "\\ftn\\config";
-#$fidoconfig = "\\pntstr\\links";
+#UNIX
+#$fidoconfig = "/usr/local/etc/fido/links";
 
-$PntStrFileMask   = "pntstr.*";
+$PntStrFileMask   = "PNTSTR.*";
 $PointSegmentFile = "segNNNN.ptn";  # NNNN replace to node number in future
 
 # read from fidoconfig
@@ -68,6 +73,7 @@ $protinbound = "\\ftn\\inbound";
 # Variables (& constants) section
 
 %password = ();
+%pointName = ();
 
 @validflags = ( V34, V32, V32B, VFC, HST, X2C, X2S, V90C, V90S, HST, H14, H16,
                 ZYX, Z19, V32T, CSP, PEP, MAX, H96, MNP, V42B, V42, V29, V22,
@@ -110,9 +116,11 @@ if( $fidoconfig =~ /\\/ ){
 
 &readconfig($fidoconfig);
 
+
 open(LOG, ">>$logfiledir" . "pntstr.log") || print STDERR "Can't open log file (", $logfiledir, "pntstr.log)\n";
 print LOG "\n---Starting at $curdate\n";
 print LOG "Fidoconfig \"$fidoconfig\" readed\n";
+
 
 ($a = $address) =~ s|\d+:\d+/(\d+)|$1|;
 if( $a >0 ){
@@ -133,19 +141,25 @@ $curdate = "$lt[3]-$lt[4]-$lt[5] $lt[2]:$lt[1]:$lt[0]";
 for $ff ( @inbound ){
    @fields = ();
    if( $ff =~ /\.([0-9]+)/ ){
-     $pointNum = $1;
+#     $pointNum = $1;
+     $pointNum = "$address.$1";
      if( !open( FF, $ff) ){  print "can't open \"$ff\", skip file\n"; next; }
      print LOG "Process $ff (point number $pointNum)...\n";
      $pass = <FF>;
-     chomp($pass);
-     if( !$password{$pointNum} ){
-       print "Point $pointNum (or password for it) not found\n";
-       print LOG "Point $pointNum (or password for it) not found\n";
-       ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
-       print LOG "Rename $ff to $bb ...";
-       close FF;
-       rename $ff, $bb || die "Error!\n";
-       print LOG "OK\n";
+#     chomp($pass);
+     $pass =~ s/[\n\r]$//g;  # chomp is platform-dependent
+     if( !defined($password{$pointNum}) ){
+       $pass = $ff . ".bad";
+       print LOG "Point $pointNum not found\n",
+                 "Rename $ff to $pass\n";
+       print "Point $pointNum not found\n";
+       rename $ff, $pass;
+     }elsif( length($password{$pointNum})==0 ){
+       $pass = $ff . ".bad";
+       print LOG "Empty password for point $pointNum\n",
+                 "Rename $ff to $pass\n";
+       print "Empty password for point '$pointNum' ($password{$pointNum})\n";
+       rename $ff, $pass;
      }elsif( $pass =~ /^$password{$pointNum}$/ ){
        print LOG "... $ff : password OK\n";
        $pointString = <FF>;
@@ -158,7 +172,7 @@ for $ff ( @inbound ){
          unlink $ff || die "Error!\n";
          print LOG "OK\n";
        }else{
-         ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
+         ($bb = $ff) =~ s/...\.$pointNum$/ERR.$pointNum/;
          print LOG "Rename $ff to $bb ...";
          close FF;
          rename $ff, $bb || die "Error!\n";
@@ -167,7 +181,7 @@ for $ff ( @inbound ){
      }else{
        print "Error: Invalid password \"$pass\" for point \"$pointNum\"\n";
        print LOG "...Invalid password \"$pass\" for point \"$pointNum\"\n";
-       ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
+       ($bb = $ff) =~ s/...\.$pointNum$/SEC.$pointNum/;
        print LOG "Rename $ff to $bb ...";
        close FF;
        rename $ff, $bb || die "Error!\n";
@@ -217,11 +231,10 @@ sub readconfig{
 #    }elsif( $line[0] =~ /^$/i ){
     }elsif( $line[0] =~ /^link$/i ){
        # Write previous item if point
-       if( $pointName && $pointNo ){
-          if( $password ){
-            $password{$pointNo} = $password;
-            $pointName{$pointNo} = $pointName;
-          }else{
+       if( $pointNo ){
+          $password{$pointNo} = $password;
+          $pointName{$pointNo} = $pointName;
+          if( !$password ){
             print LOG "\nEmpty password for point $address.$pointNo, ignored\n";
           }
        }
@@ -233,8 +246,10 @@ sub readconfig{
        shift @line;
        $pointName = join " ", @line;
     }elsif( $line[0] =~ /^aka$/i ){
-       if( $address && ($line[1] =~ /$address.([1-9]\d*)/) ){
-         $pointNo = $1;
+#       if( $address && ($line[1] =~ /$address.([1-9]\d*)/) ){
+#         $pointNo = $1;
+       if( $address && ($line[1] =~ /$address.[1-9][0-9]*/) ){
+         $pointNo = $line[1];
        }
     }elsif( !$pointNo ){
        next;
@@ -247,21 +262,22 @@ sub readconfig{
 #       $ = $line[1];
 #    }
   }
-  if( $pointName && $pointNo ){
-     if( $password ){
-       $password{$pointNo} = $password;
-       $pointName{$pointNo} = $pointName;
-     }else{
-       print LOG "\nEmpty password for point $address.$pointNo, ignored\n";
-     }
+  if( $pointNo ){
+    $password{$pointNo} = $password;
+    $pointName{$pointNo} = $pointName;
+    if( !$password ){
+      print LOG "\nEmpty password for point $address.$pointNo, ignored\n";
+    }
   }
   close FIDOCONFIG;
   print LOG "OK\n";
 
+  # Add slash (or backslash) if omitted
   $nodelistdir .= $DIRSEP if( length($nodelistdir)>0 && ($nodelistdir !~ /$DIRSEP$/) );
   $protinbound .= $DIRSEP  if( length($protinbound)>0 && ($protinbound !~ /$DIRSEP$/) );
   $logfiledir  .= $DIRSEP  if( length($logfiledir)>0 && ($logfiledir !~ /$DIRSEP$/) );
 
+# debug output #
 #for $pointNo (keys %password){
 #  print "$pointNo:$password{$pointNo}:$pointName{$pointNo}\n";
 #}
