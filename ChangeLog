@@ -1,3 +1,7 @@
+2002-12-14 Saturday 16:21  stas_degteff
+
+	* pntstr.pl (1.4): Use full point address
+
 2002-10-28 Monday 08:25  stas_degteff
 
 	* pntstr.pl (1.3): Fix shebang
