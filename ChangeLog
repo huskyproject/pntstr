@@ -1,16 +1,16 @@
-2002-06-19 Wednesday 10:11  stas
+2002-06-19 Wednesday 01:11  stas
 
 	* .cvs2cl (1.1): ChangeLog generation on.
 
-2002-06-17 Monday 07:37  stas
+2002-06-16 Sunday 22:37  stas
 
 	* Makefile (1.1): Create Makefile for install & uninstall.
 
-2002-06-04 Tuesday 13:37  stas
+2002-06-04 Tuesday 04:37  stas
 
 	* README (1.1), pntstr.pl (1.2): Some bugs fixed.
 
-2002-06-03 Monday 13:48  stas
+2002-06-03 Monday 04:48  stas
 
 	* pntstr.pl (1.1): Initial revision
 
