@@ -1,11 +1,10 @@
-#!/usr/bin/perl
+#/usr/bin/perl
 
 # Point string processor
 # (c) Stas Degteff 2:5080/102
 
 # $Id$
 #
-# $Log$
 #
 #
 
@@ -25,6 +24,9 @@ HELP
 #-----------------------------------------------------------------------------#
 #
 # $Log$
+# Revision 1.6  2002/06/03 18:48:27  User
+# Many, many fixes.
+#
 # Revision 1.5  2002/06/02 14:20:30  User
 # First release.
 # Fidoconfig parsing implement (include not supported).
@@ -48,13 +50,15 @@ HELP
 # Setup section --------------------------------------------------------------#
 
 $fidoconfig = "\\ftn\\config";
+#$fidoconfig = "\\pntstr\\links";
 
-$PntStrFileMask = "pntstr.*";
-$PointSegmentFile = "SEG0102.PTS";
+$PntStrFileMask   = "pntstr.*";
+$PointSegmentFile = "segNNNN.ptn";  # NNNN replace to node number in future
 
 # read from fidoconfig
 $address = "2:5080/102";
-$logfiledir = "\\ftn\\log";
+$logfiledir  = "\\ftn\\log";
+#$logfiledir = ".";
 $nodelistdir = "\\ftn\\nodelist";
 $protinbound = "\\ftn\\inbound";
 
@@ -92,6 +96,8 @@ if( $ENV{FIDOCONFIG} ){
 }elsif( $ENV{fidoconfig} ){
    $fidoconfig = $ENV{fidoconfig};
 }
+
+# $DIRSEP - directory char (slash in unix and backslash in DOS-like OS
 if( $fidoconfig =~ /\\/ ){
   $DIRSEP = "\\";
 }else{
@@ -101,15 +107,23 @@ if( $fidoconfig =~ /\\/ ){
 
 &readconfig($fidoconfig);
 
-$nodelistdir .= $DIRSEP if( length($nodelistdir)>0 && ($nodelistdir !~ /$DIRSEP$/) );
-$protinbound .= $DIRSEP  if( length($protinbound)>0 && ($protinbound !~ /$DIRSEP$/) );
+open(LOG, ">>$logfiledir" . "pntstr.log") || print STDERR "Can't open log file (", $logfiledir, "pntstr.log)\n";
+print LOG "\n---Starting at $curdate\n";
+print LOG "Fidoconfig \"$fidoconfig\" readed\n";
+
+($a = $address) =~ s|\d+:\d+/(\d+)|$1|;
+if( $a >0 ){
+  $a = sprintf "%04u", $a ;
+  $PointSegmentFile =~ s/NNNN/$a/;
+}elsif( $a == "0" ){
+  die "Hmmmmmmm! Host with points is BAD idea!\n";
+}else{
+  die "\n";
+}
 
 @lt = localtime(time); $lt[5]=$lt[5]+1900; $lt[4]++;
 $curdate = "$lt[3]-$lt[4]-$lt[5] $lt[2]:$lt[1]:$lt[0]";
 @lt=();
-
-open(LOG, ">>$logfiledir" . "pntstr.log") || print STDERR "Can't open log file (", $logfiledir, "pntstr.log)\n";
-print LOG "\n---Starting at $curdate\n";
 
 @inbound = glob("$protinbound$PntStrFileMask");
 
@@ -122,18 +136,39 @@ for $ff ( @inbound ){
      $pass = <FF>;
      chomp($pass);
      if( !$password{$pointNum} ){
-       ($pass = $ff) =~
-       print LOG "Point $pointNum (or password for it) not found\n",
-                 "Rename $ff to";
        print "Point $pointNum (or password for it) not found\n";
+       print LOG "Point $pointNum (or password for it) not found\n";
+       ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
+       print LOG "Rename $ff to $bb ...";
+       close FF;
+       rename $ff, $bb || die "Error!\n";
+       print LOG "OK\n";
      }elsif( $pass =~ /^$password{$pointNum}$/ ){
        print LOG "... $ff : password OK\n";
        $pointString = <FF>;
        chomp($pointString);
-       writePointString($pointString) if( !parsePointString($pointString) );
+       $pointString = parsePointString($pointString);
+       if( length($pointString)>0 ){
+         writePointString($pointString);
+         print LOG "Remove input file \"$ff\"...";
+         close FF;
+         unlink $ff || die "Error!\n";
+         print LOG "OK\n";
+       }else{
+         ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
+         print LOG "Rename $ff to $bb ...";
+         close FF;
+         rename $ff, $bb || die "Error!\n";
+         print LOG "OK\n";
+       }
      }else{
+       print "Error: Invalid password \"$pass\" for point \"$pointNum\"\n";
        print LOG "...Invalid password \"$pass\" for point \"$pointNum\"\n";
-       print "...Invalid password \"$pass\" for point \"$pointNum\"\n";
+       ($bb = $ff) =~ s/...\.$pointNum$/BAD.$pointNum/;
+       print LOG "Rename $ff to $bb ...";
+       close FF;
+       rename $ff, $bb || die "Error!\n";
+       print LOG "OK\n";
      }
      close FF;
    }
@@ -150,7 +185,7 @@ sub readconfig{
   my $config = $_[0]; # fidoconfig file name
   my $pointNo=0, $pointName="";
   my @line,$line;
-  local $t;
+  my $t, $a=1;
 
   open FIDOCONFIG, "$config" || die "Can't open $config: $!";
 
@@ -164,7 +199,19 @@ sub readconfig{
 #       readconfig($line[1]);
 #    }
     if( $line[0] =~ /^address$/i ){
-       $address = $line[1];
+       $address = $line[1] if($a);
+       $a=0;
+    }elsif( $line[0] =~ /^protinbound$/i ){
+       $protinbound = $line[1];
+    }elsif( $line[0] =~ /^logfiledir$/i ){
+       $logfiledir  = $line[1];
+    }elsif( $line[0] =~ /^nodelistdir$/i ){
+       $nodelistdir = $line[1];
+    }elsif( $line[0] =~ /^PntStrFileMask$/i ){
+       $PntStrFileMask = $line[1];
+    }elsif( $line[0] =~ /^PointSegmentFile$/i ){
+       $PointSegmentFile = $line[1];
+#    }elsif( $line[0] =~ /^$/i ){
     }elsif( $line[0] =~ /^link$/i ){
        # Write previous item if point
        if( $pointName && $pointNo ){
@@ -183,8 +230,8 @@ sub readconfig{
        shift @line;
        $pointName = join " ", @line;
     }elsif( $line[0] =~ /^aka$/i ){
-       if( $address && ($line[1] =~ /$address.[1-9]\d*/) ){
-         $pointNo = $line[1];
+       if( $address && ($line[1] =~ /$address.([1-9]\d*)/) ){
+         $pointNo = $1;
        }
     }elsif( !$pointNo ){
        next;
@@ -197,15 +244,24 @@ sub readconfig{
 #       $ = $line[1];
 #    }
   }
+  if( $pointName && $pointNo ){
+     if( $password ){
+       $password{$pointNo} = $password;
+       $pointName{$pointNo} = $pointName;
+     }else{
+       print LOG "\nEmpty password for point $address.$pointNo, ignored\n";
+     }
+  }
   close FIDOCONFIG;
   print LOG "OK\n";
 
-#for $pointNo (keys %password){
-#  print "$pointNo : $password{$pointNo} : $pointName{$pointNo}\n";
-#}
+  $nodelistdir .= $DIRSEP if( length($nodelistdir)>0 && ($nodelistdir !~ /$DIRSEP$/) );
+  $protinbound .= $DIRSEP  if( length($protinbound)>0 && ($protinbound !~ /$DIRSEP$/) );
+  $logfiledir  .= $DIRSEP  if( length($logfiledir)>0 && ($logfiledir !~ /$DIRSEP$/) );
 
-# dummy
-#$password{999} = "qwerty";
+#for $pointNo (keys %password){
+#  print "$pointNo:$password{$pointNo}:$pointName{$pointNo}\n";
+#}
 
 }
 
@@ -226,12 +282,11 @@ sub parsePointString{
   $line =~ s/[ \t]/_/g;
 
   @fields = split /,/, $line;
-  my $res = $pointNum == $fields[0];
 
-  if($res){
-    print LOG "Can't match point number: \"$fields[0]\", not $pointNum\n";
-    print "Can't match point number: \"$fields[0]\", not $pointNum\n";
-    return 1;
+  if($pointNum != $fields[$pntnumFieldNo]){
+    print LOG "Can't match point number: \"$fields[$pntnumFieldNo]\", not $pointNum\n";
+    print "Can't match point number: \"$fields[$pntnumFieldNo]\", not $pointNum\n";
+    return "";
   }
 
   # print point string fields (log)
@@ -249,33 +304,52 @@ FIELDS
   for( $i=$flagFieldNo+1; $i<=$#fields; $i++ ){ print ",$fields[$i]"; }
   print "\n\n";
 
+  # validate "Point" (1st) field
+  if( $fields[0] !~ /^Point$/ ){
+    print LOG "Error: Invalid first field \"$fields[0]\", valid value is \"Point\". Process failed.\n";
+    print "Error: Invalid first field \"$fields[0]\", valid value is \"Point\". Process failed.\n";
+  }else{
+    if( $fields[0] != "Point" ){
+      $fields[0] = "Point";
+      print LOG "Warning: Invalid first field \"$fields[0]\", replace to valid value \"Point\"\n";
+      print  "Warning: Invalid first field \"$fields[0]\", replace to valid value \"Point\"\n";
+    }
+  }
+
   # validate phone
-  if( $fields[$phoneFieldNo] !~ /[0-9-]/ ){
-     print LOG "Invalid phone number \"$fields[$phoneFieldNo]\" (only digits & dash is legal)\n";
-     print "Invalid phone number \"$fields[$phoneFieldNo]\" (only digits & dash is legal)\n";
-     $res = 5;
+  if( $fields[$phoneFieldNo] =~ /^-Unpublished-$/i ){
+    if( $fields[$phoneFieldNo] != "-Unpublished-" ){
+     $fields[$phoneFieldNo] = "-Unpublished-";
+     print LOG "Warning: Invalid \"magic\" phone number \"$fields[$phoneFieldNo]\": it's case-cencitivity, replace to valid value \"-Unpublished-\"\n";
+     print "Warning: Invalid \"magic\" phone number \"$fields[$phoneFieldNo]\": it's case-cencitivity, replace to valid value \"-Unpublished-\"\n";
+    }
+  }elsif( $fields[$phoneFieldNo] !~ /^[0-9-]+$/i ){
+     print LOG "Invalid phone number \"$fields[$phoneFieldNo]\" (only digits & dash is legal, also "-Unpublished-")\n";
+     print "Invalid phone number \"$fields[$phoneFieldNo]\" (only digits & dash is legal, also "-Unpublished-")\n";
+     return "";
   }
   # validate flags
   for( $i=$#fields; $i>=$flagFieldNo; $i-- ){
     for( $ii=$#validflags; $ii>=0 && $fields[$i] !~ /$validflags[$ii]/ ; $ii-- ){
        if( uc($fields[$i]) =~ /$validflags[$ii]/ ){
+         $fields[$i] = uc($fields[$i]);
          print LOG "Warning: flag \"$fields[$i]\" converted to uppercase\n";
          print "Warning: flag \"$fields[$i]\" converted to uppercase\n";
-         $fields[$i] = uc($fields[$i]);
        }
     }
     if( $fields[$i] !~ /$validflags[$ii]/ ){
-      $res = 7;
+      return "";
       print LOG "Illegal flag \"$fields[$i]\"\n";
       print "Illegal flag \"$fields[$i]\"\n";
     }
   }
-  return $res;
+  return join(",",@fields);     # return valid point string
 }
 
 sub writePointString(){
   my @fields = split /,/, $_[0];
-  local @aflds = (), $tmpname;
+  my @aflds = (), $tmpname;
+  my $doit=1;
 
   if( !open(SEGMENT, "$nodelistdir$PointSegmentFile") ){
     print LOG "Can't open $PointSegmentFile ($!), abort.\n";
@@ -293,10 +367,13 @@ sub writePointString(){
     @aflds = split /,/, $line;
     if( "$aflds[$pntnumFieldNo]" == "$fields[$pntnumFieldNo]" ){
        print TMP join(",",@fields), "\n"; # replace point string
+       $doit=0;
     }else{
        print TMP "$line\n";
     }
   }
+  print TMP (join(",",@fields), "\n") if($doit); # add point string
+
   print LOG "OK\n";
   close SEGMENT;
   close TMP;

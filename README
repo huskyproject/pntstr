@@ -1,0 +1,35 @@
+     PntStr: Point String / Point Segment Processor
+
+     This program operate with pointsergment of the node, it's good assistante
+for SysOp.
+
+     Requires:
+- husky fidoconfig without includes (or replace defaults in program text)
+- Perl 5
+
+     Pntstr scan secure inbound directory for files pointstr.*
+(* = point number) and parse its.
+
+Point string file format (with line numbers):
+1: Session_password_for_point
+2: Pointlist string
+
+Features:
+- check password
+- match file suffix & point string 
+- validate flags
+- validate phone
+- replace spaces & tabs with underscore
+- log all actions
+- backup pointsegment into *.bak
+- write output comments into stdout (for posting into ode information echoarea)
+
+Limitations:
+- fidoconfig includes not supported
+- only first address in fidoconfig use (not support multi-aka system)
+
+
+Use PntStr with pleasure :)
+
+(c) Stas Degteff 2:5080/102
+
