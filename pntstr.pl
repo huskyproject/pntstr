@@ -2,6 +2,8 @@
 
 # Point string processor
 # (c) Stas Degteff 2:5080/102
+#
+# Only "Boss+Point" pointlist format is supported
 
 # $Id$
 #
@@ -24,6 +26,9 @@ HELP
 #-----------------------------------------------------------------------------#
 #
 # $Log$
+# Revision 1.4  2002/12/14 16:21:20  stas_degteff
+# Use full point address
+#
 # Revision 1.3  2002/10/28 08:25:50  stas_degteff
 # Fix shebang
 #
